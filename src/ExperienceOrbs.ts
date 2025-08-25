@@ -7,8 +7,8 @@ import ExampleSound from "../resources/sounds/sample.mp3";
 
 export default class ExamplePlugin extends Plugin {
     panelManager: PanelManager = new PanelManager();
-    pluginName = "ExamplePlugin";
-    author: string = "Your Name";
+    pluginName = "ExperienceOrbs";
+    author: string = "Ellz";
 
     constructor() {
         super()
