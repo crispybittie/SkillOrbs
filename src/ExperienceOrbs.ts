@@ -168,7 +168,7 @@ export default class ExperienceOrbs extends Plugin {
   private skillToIcon: Record<string, string> = {
     hitpoints: '💖', accuracy: '🎯', strength: '💪', defense: '🛡️', magic: '🔮', range: '🏹',
     fishing: '🎣', mining: '⛏️', smithing: '🔨', cooking: '🍳', forestry: '🌳', crafting: '🧵',
-    harvesting: '🌾', crime: '🥷', enchanting: '✨', potionmaking: '🧪',
+    harvesting: '🌾', crime: '🥷', enchanting: '✨', potionmaking: '🧪', athletics: '👟'
   };
 
   // ===== Settings schema (Nameplates-style: text + callback) =====
@@ -608,15 +608,16 @@ private renderOrbStatsFor(orb: OrbState): void {
   const progHdr = orb.tooltip.querySelector('.tip-progress')   as HTMLElement | null;
 
   // Header: (% to Next) — remaining, not completed
-  if (progHdr) progHdr.textContent = isMaxed ? 'Maxed' : `(${((1 - prog) * 100).toFixed(1)}% to Next)`;
+  if (progHdr) progHdr.textContent = isMaxed ? 'Maxed' : `(${((prog) * 100).toFixed(1)}% to Next)`;
 
   // Current XP
-  if (curNode) curNode.textContent = abbreviateValue(orb.totalXp ?? 0);
+  if (curNode) curNode.textContent = this.formatXp(orb.totalXp);
+
 
   // XP to Level
   if (toNode) {
     const toNext = Math.max(0, Math.floor(orb.toNext ?? 0));
-    toNode.textContent = isMaxed ? '' : abbreviateValue(toNext);
+    toNode.textContent = isMaxed ? '' : this.formatXp(toNext);
   }
 
   // XP/hr (per-skill EMA or avg since first gain)
@@ -1001,6 +1002,11 @@ private getSkillXpPerHour(orb: OrbState, nowMs: number): number {
   const gained = (orb.totalXp ?? 0) - orb.startXp;
   if (gained <= 0) return NaN;
   return gained / dtHours;
+}
+
+private formatXp(n: number | undefined): string {
+  const v = Math.max(0, Math.floor(n ?? 0));
+  return v.toLocaleString("en-US"); // adds commas every 3 digits
 }
 
 }
