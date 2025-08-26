@@ -552,11 +552,11 @@ private onMouseLeave(): void {
 
     if (curNode) curNode.textContent = abbreviateValue(orb.totalXp);
     if (isMaxed) {
-        if (progEl) progEl.textContent = 'Maxed';
+        if (headerRight) headerRight.textContent = 'Maxed';
             if (toRow)  toRow.classList.add('is-hidden');
         } else {
-            const pctToNext = (100 - pct).toFixed(1); // or show remaining percent
-            if (progEl) progEl.textContent = `(${pct.toFixed(1)}% to Next)`;
+            const pctToNext = (100 - prog).toFixed(1); // or show remaining percent
+            if (headerRight) headerRight.textContent = `(${prog.toFixed(1)}% to Next)`;
             if (toRow)  toRow.classList.remove('is-hidden');
             if (toNode) toNode.textContent = abbreviateValue(Math.max(0, Math.floor(orb.toNext)));
         }
@@ -717,13 +717,22 @@ private updateInnerCoreScale(v: unknown): void {
 .hl-xp-orb.is-fading{ opacity:0; transform:translateY(-4px); }
 
 /* progress ring: true thickness, color-coded by --ringColor */
-.hl-xp-orb__ring{
-  position:absolute; inset:0; border-radius:50%;
-  background:conic-gradient(var(--ringColor, hsl(0,60%,45%)) calc(var(--ringPct,0)*100%), rgba(0,0,0,.20) 0);
-  /* clip between inner and outer radii */
-  -webkit-mask:radial-gradient(circle, transparent var(--innerRpx), #000 var(--outerR));
-          mask:radial-gradient(circle, transparent var(--innerRpx), #000 var(--outerR));
-  box-shadow:0 1px 4px rgba(0,0,0,.25);
+.hl-xp-orb__ring {
+  position: absolute; inset: 0; border-radius: 50%;
+  background: conic-gradient(
+    var(--ringColor, hsl(0,60%,45%)) calc(var(--ringPct,0) * 100%),
+    rgba(0,0,0,0.20) 0
+  );
+
+  /* hard-edge clipping into a ring */
+  
+
+  /* simpler alternative if you don’t want path math: */
+  clip-path: circle(50% at 50% 50%) content-box; 
+     padding: calc(var(--size) * var(--thickness));
+     box-sizing: border-box;
+  
+  box-shadow: 0 1px 4px rgba(0,0,0,0.25);
 }
 
 /* core: solid dark disc (no inward gradient) */
