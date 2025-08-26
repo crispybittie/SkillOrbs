@@ -428,8 +428,9 @@ private onMouseLeave(): void {
     const root = document.createElement('div');
     // initialize CSS vars (fractions)
     root.style.setProperty('--size', this.getOrbSize() + 'px');
-    root.style.setProperty('--thickness', String(this.getRingThickness()));          // 0.04..0.18
-    root.style.setProperty('--innerScale', String(this.getInnerCoreScale()));        // 0.70..0.95  👈 NEW name
+    root.style.setProperty('--innerScale', String(this.getInnerCoreScale()));   // 0.70..0.95
+    root.style.setProperty('--thickness',  String(this.getRingThickness()));    // 0.04..0.18
+
 
 // after creating `root` in ensureOrb(...)
     if ((document as any).highlite?.managers?.UIManager?.bindOnClickBlockHsMask) {
@@ -468,9 +469,9 @@ private onMouseLeave(): void {
     icon.className = 'hl-xp-orb__icon';
     icon.textContent = this.skillToIcon[skillName] ?? '✨';
     // force emoji glyph to a specific px size (avoids small emoji on some stacks)
-    const corePx = Math.floor(this.getOrbSize() * this.getInnerCoreScale()); // = --innerDpx
-const fontPx = Math.floor(corePx * 0.74);  // 74% of inner diameter sits comfortably inside the clip
-icon.style.fontSize = fontPx + 'px';
+    const innerPx = Math.floor(this.getOrbSize() * this.getInnerCoreScale());
+    const iconPx  = Math.floor(innerPx * 0.62); // ~62% leaves a nice rim on all platforms
+    icon.style.fontSize = iconPx + 'px';
 
 
 
@@ -501,9 +502,10 @@ icon.style.fontSize = fontPx + 'px';
         `;
 
     root.appendChild(ring);
-    root.appendChild(iconWrap);   // NEW wrapper sized to the inner core
-    iconWrap.appendChild(icon);   // emoji now lives inside the wrapper
-    root.appendChild(hoverMask); // NEW (sits above icon)
+    root.appendChild(core);
+    root.appendChild(iconWrap);
+    iconWrap.appendChild(icon);
+    root.appendChild(hoverMask);
     root.appendChild(levelBadge);
     root.appendChild(tip);
 
@@ -524,24 +526,29 @@ icon.style.fontSize = fontPx + 'px';
   private renderOrb(orb: OrbState) {
     // Force 100% fill and "Maxed" semantics at level 100
     const isMaxed = orb.currentLevel >= 100;
-    const progress01 = isMaxed ? 1 : orb.progress01;
-    const pct = Math.round(progress01 * 100);
-    orb.root.style.setProperty('--ring-pct', String(pct));
+    const prog = isMaxed ? 1 : Math.max(0, Math.min(1, orb.progress01));
+
+    orb.root.style.setProperty('--ringPct', String(prog));
 
     // Map 0..1 -> hue 0..120 (muted red to muted green), low saturation for “muted”
     const hue = Math.round(120 * orb.progress01);       // 0 = red, 120 = green
     const sat = 42;                                      // muted
     const light = 46;                                    // mid
     const ringColor = `hsl(${hue} ${sat}% ${light}%)`;
-    orb.root.style.setProperty('--ring-color', ringColor);
+    orb.root.style.setProperty('--ringColor', ringColor);
 
     orb.levelBadge.textContent = String(orb.currentLevel);
 
     const curNode = orb.tooltip.querySelector('[data-k="cur"]') as HTMLElement | null;
     const toNode  = orb.tooltip.querySelector('[data-k="to"]')  as HTMLElement | null;
     const hrNode  = orb.tooltip.querySelector('[data-k="xphr"]') as HTMLElement | null;
-    const progEl  = orb.tooltip.querySelector('.tip-progress') as HTMLElement | null;
+
+    const headerRight  = orb.tooltip.querySelector('.tip-progress') as HTMLElement | null;
+    if (headerRight) headerRight.textContent = isMaxed ? 'Maxed' : `(${Math.round(prog * 100)}% to Next)`;
+
+    
     const toRow   = orb.tooltip.querySelector('.row-xpToLevel') as HTMLElement | null;
+    if (toRow) toRow.style.display = isMaxed ? 'none' : '';
 
     if (curNode) curNode.textContent = abbreviateValue(orb.totalXp);
     if (isMaxed) {
@@ -645,9 +652,9 @@ icon.style.fontSize = fontPx + 'px';
   this.orbs.forEach(orb => orb.root.style.setProperty('--thickness', String(thick)));
 }
 private updateIconSizes(): void {
-  const corePx = Math.floor(this.getOrbSize() * this.getInnerCoreScale());
-  const fontPx = Math.floor(corePx * 0.74);
-  this.orbs.forEach(o => { o.icon.style.fontSize = fontPx + 'px'; });
+  const innerPx = Math.floor(this.getOrbSize() * this.getInnerCoreScale());
+  const iconPx  = Math.floor(innerPx * 0.62);
+  this.orbs.forEach(o => { o.icon.style.fontSize = iconPx + 'px'; });
 }
 
 private updateOrbSizes(n: unknown): void {
@@ -671,126 +678,124 @@ private updateInnerCoreScale(v: unknown): void {
     if (this.cssInjected) return;
     this.cssInjected = true;
 
-    const css = `/* =========================
-   XP Orbs — container + orb
-   Inputs from TS per-orb:
+    const css = `
+    /* =========================
+   Highlite XP Orbs — Core Styles
+   Variables set per-orb from TS:
      --size: px (e.g. "56px")
-     --thickness: fraction of radius (0.04..0.18)
-     --innerScale: fraction of radius (0.70..0.95)
+     --innerScale: 0..1   (e.g. 0.82)
+     --thickness:  0..1   (e.g. 0.10 of radius)
+     --ringPct:    0..1   (progress toward next level)
+     --ringColor:  any CSS color (we compute from ringPct)
    ========================= */
 
-/* Group container: click-through, shrink-wraps to contents, centered as a group.
-   (JS sets top/left; we keep the centering defaults here too.) */
-.hl-xp-orbs {
-  pointer-events: none;
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  display: inline-flex;
-  width: max-content;
-  white-space: nowrap;
-  gap: 8px;
+/* group container: centered as a group, click-through */
+.hl-xp-orbs{
+  pointer-events:none;
+  position:absolute;
+  left:50%;
+  transform:translateX(-50%);
+  display:inline-flex;
+  width:max-content;
+  white-space:nowrap;
+  gap:8px;
 }
 
-/* Single orb root — defines derived vars used by all children */
-.hl-xp-orb {
-  pointer-events: auto;
-  position: relative;
-  width: var(--size);
-  height: var(--size);
-  transition: opacity 220ms ease, transform 220ms ease;
-  /* Derived (keep in sync everywhere) */
-  --innerR:   calc(var(--innerScale, 0.82) * 50%);                    /* inner radius, % of box */
-  --innerDpx: calc(var(--size, 56px) * var(--innerScale, 0.82));      /* inner diameter, px */
-}
-.hl-xp-orb.is-fading { opacity: 0; transform: translateY(-4px); }
+/* one orb */
+.hl-xp-orb{
+  position:relative;
+  pointer-events:auto;
+  width:var(--size);
+  height:var(--size);
+  transition:opacity 220ms ease, transform 220ms ease;
 
-/* ----- RING (progress) ----- */
-/* Conic fill clipped at the same inner radius the core uses */
-.hl-xp-orb__ring {
-  position: absolute; inset: 0; border-radius: 50%;
-  --t: var(--thickness, 0.10);
-  --ringInner: max(var(--innerR), calc((1 - var(--t)) * 50%));
-  background: conic-gradient(var(--ring-color, #7aa96b) calc(var(--ring-pct, 0) * 1%),
-                             rgba(0,0,0,0.18) 0);
-  /* precise radial mask (±0.5px overlap avoids AA gaps) */
-  -webkit-mask: radial-gradient(circle,
-                    transparent calc(var(--ringInner) - 0.5px),
-                    #000        calc(var(--ringInner) + 0.5px));
-          mask: radial-gradient(circle,
-                    transparent calc(var(--ringInner) - 0.5px),
-                    #000        calc(var(--ringInner) + 0.5px));
-  box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+  /* derived (used everywhere) */
+  --outerR: calc(var(--size) / 2);
+  --innerDpx: calc(var(--size) * var(--innerScale));
+  --innerRpx: calc(var(--innerDpx) / 2);
+}
+.hl-xp-orb.is-fading{ opacity:0; transform:translateY(-4px); }
+
+/* progress ring: true thickness, color-coded by --ringColor */
+.hl-xp-orb__ring{
+  position:absolute; inset:0; border-radius:50%;
+  background:conic-gradient(var(--ringColor, hsl(0,60%,45%)) calc(var(--ringPct,0)*100%), rgba(0,0,0,.20) 0);
+  /* clip between inner and outer radii */
+  -webkit-mask:radial-gradient(circle, transparent var(--innerRpx), #000 var(--outerR));
+          mask:radial-gradient(circle, transparent var(--innerRpx), #000 var(--outerR));
+  box-shadow:0 1px 4px rgba(0,0,0,.25);
 }
 
-/* ----- CORE (solid interior) ----- */
-.hl-xp-orb__core {
-  position: absolute; inset: 0; border-radius: 50%;
-  background: radial-gradient(closest-side, #1b1b1b 0 var(--innerR), transparent 0);
+/* core: solid dark disc (no inward gradient) */
+.hl-xp-orb__core{
+  position:absolute; inset:0; border-radius:50%;
+  background:#1b1b1b;
+  -webkit-clip-path:circle(var(--innerRpx) at 50% 50%);
+          clip-path:circle(var(--innerRpx) at 50% 50%);
 }
 
-/* ----- HOVER MASK (darkens core; sits below level text) ----- */
-.hl-xp-orb__mask {
-  position: absolute; inset: 0; border-radius: 50%;
-  background: radial-gradient(closest-side, rgba(0,0,0,0.70) 0 var(--innerR), transparent 0);
-  opacity: 0; transition: opacity 120ms ease; pointer-events: none; z-index: 1;
+/* hover mask: darken core; stays below level text */
+.hl-xp-orb__mask{
+  position:absolute; inset:0; border-radius:50%;
+  background:rgba(0,0,0,.70);
+  -webkit-clip-path:circle(var(--innerRpx) at 50% 50%);
+          clip-path:circle(var(--innerRpx) at 50% 50%);
+  opacity:0; transition:opacity .12s ease; pointer-events:none; z-index:1;
 }
-.hl-xp-orb.is-hover .hl-xp-orb__mask { opacity: 1; }
+.hl-xp-orb.is-hover .hl-xp-orb__mask{ opacity:1; }
 
-/* ----- ICON WRAP (exact inner circle; hard clip) ----- */
-.hl-xp-orb__iconwrap {
-  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-  width:  var(--innerDpx);
-  height: var(--innerDpx);
-  border-radius: 50%;
-  overflow: hidden; overflow: clip;
-  -webkit-clip-path: circle(calc(50% - 1px) at 50% 50%);
-          clip-path: circle(calc(50% - 1px) at 50% 50%);
-  pointer-events: none;
-  display: flex; align-items: center; justify-content: center;
-  contain: paint;
-}
-
-/* Actual emoji/icon glyph — font-size is set from TS in px */
-.hl-xp-orb__icon {
-  display: block;
-  max-width: 100%; max-height: 100%;
-  line-height: 1;
-  filter: drop-shadow(0 1px 1px rgba(0,0,0,0.4));
-  pointer-events: none;
-  transition: opacity 120ms ease;
+/* icon wrap: exact inner circle; hard clip */
+.hl-xp-orb__iconwrap{
+  position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+  width:var(--innerDpx);
+  height:var(--innerDpx);
+  border-radius:50%;
+  overflow:hidden; overflow:clip;
+  -webkit-clip-path:circle(50% at 50% 50%);
+          clip-path:circle(50% at 50% 50%);
+  display:flex; align-items:center; justify-content:center;
+  contain:paint;
 }
 
-/* ----- LEVEL BADGE (on hover) ----- */
-.hl-xp-orb__level {
-  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-  font-weight: 800; font-size: calc(var(--size) * 0.38);
-  color: #ffd21e; text-shadow: 0 1px 2px rgba(0,0,0,0.6);
-  pointer-events: none; opacity: 0; z-index: 2;
+/* icon glyph (emoji/SVG); font-size set from TS in px */
+.hl-xp-orb__icon{
+  display:block;
+  max-width:100%; max-height:100%;
+  line-height:1;
+  filter:drop-shadow(0 1px 1px rgba(0,0,0,.4));
+  pointer-events:none;
+  transition:opacity .12s ease;
 }
-.hl-xp-orb.is-hover .hl-xp-orb__level { opacity: 1; }
-.hl-xp-orb.is-hover .hl-xp-orb__icon  { opacity: 0.25; }
+.hl-xp-orb.is-hover .hl-xp-orb__icon{ opacity:.25; }
 
-/* ----- TOOLTIP (below the orb) ----- */
-.hl-xp-orb__tip {
-  position: absolute; left: 50%; top: calc(100% + 8px);
-  transform: translateX(-50%) translateY(-2px);
-  min-width: 200px; padding: 8px 10px; border-radius: 10px;
-  background: rgba(0,0,0,0.85); color: white; font-size: 12px; line-height: 1.35;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.35);
-  opacity: 0; pointer-events: none; transition: opacity 120ms ease, transform 120ms ease;
+/* level badge sits above mask */
+.hl-xp-orb__level{
+  position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+  font-weight:800; font-size:calc(var(--size) * 0.38);
+  color:#ffd21e; text-shadow:0 1px 2px rgba(0,0,0,.6);
+  pointer-events:none; opacity:0; z-index:2;
 }
-.hl-xp-orb.is-hover .hl-xp-orb__tip { opacity: 1; transform: translateX(-50%) translateY(0); }
+.hl-xp-orb.is-hover .hl-xp-orb__level{ opacity:1; }
 
-.hl-xp-orb__tip-header { display:flex; justify-content:space-between; gap:12px; margin-bottom:6px; font-weight:700; }
-.hl-xp-orb__tip-row    { display:flex; justify-content:space-between; gap:24px; }
-.hl-xp-orb__tip-row span:first-child { text-align:left; }
-.hl-xp-orb__tip-row span:last-child  { text-align:right; min-width: 96px; }
-.hl-xp-orb__tip-row.is-hidden { display:none; }
+/* tooltip below with aligned columns */
+.hl-xp-orb__tip{
+  position:absolute; left:50%; top:calc(100% + 8px);
+  transform:translateX(-50%) translateY(-2px);
+  min-width:200px; padding:8px 10px; border-radius:10px;
+  background:rgba(0,0,0,.85); color:#fff; font-size:12px; line-height:1.35;
+  box-shadow:0 4px 12px rgba(0,0,0,.35);
+  opacity:0; pointer-events:none; transition:opacity .12s ease, transform .12s ease;
+}
+.hl-xp-orb.is-hover .hl-xp-orb__tip{ opacity:1; transform:translateX(-50%) translateY(0); }
 
-.hl-xp-orb__tip::after {
+.hl-xp-orb__tip-header{ display:flex; justify-content:space-between; gap:12px; margin-bottom:6px; font-weight:700; }
+.hl-xp-orb__tip-row{ display:flex; justify-content:space-between; gap:24px; }
+.hl-xp-orb__tip-row span:first-child{ text-align:left; }
+.hl-xp-orb__tip-row span:last-child{ text-align:right; min-width:96px; }
+
+.hl-xp-orb__tip::after{
   content:""; position:absolute; left:50%; bottom:100%; transform:translateX(-50%);
-  border:6px solid transparent; border-bottom-color: rgba(0,0,0,0.85);
+  border:6px solid transparent; border-bottom-color:rgba(0,0,0,.85);
 }
 `;
     const style = document.createElement('style');
