@@ -28,6 +28,12 @@ type OrbState = {
   lastActivityMs: number;
   removeHandle?: number;
   isFading?: boolean;
+
+  startXp?: number;        // xp snapshot at first gain for THIS skill
+  startTs?: number;        // ms timestamp when first gain happened
+  emaXpPerHour?: number;   // smoothed per-skill rate
+  _lastSampleXp?: number;  // last sample for EMA
+  _lastSampleTs?: number;  // last sample time for EMA
 };
 
 export default class ExperienceOrbs extends Plugin {
@@ -255,6 +261,7 @@ resetDefaults: {
     window.addEventListener('mousemove', this.onMouseMoveBound);
     window.addEventListener('mouseleave', this.onMouseLeaveBound);
     this.refreshLayoutFromSettings();
+    this.startStatsLoop();
     this.log('Experience Orbs started');
   }
 
@@ -268,7 +275,7 @@ resetDefaults: {
     this.onMouseMoveBound = null;
     this.onMouseLeaveBound = null;
     cancelAnimationFrame(this.hoverRaf);
-
+    this.stopStatsLoop();
     this.log('Experience Orbs stopped');
   }
 
@@ -280,53 +287,70 @@ resetDefaults: {
   const main = this.gameHooks.EntityManager.Instance.MainPlayer;
   if (!main) return;
 
-  // Normalize both sources; these calls handle: undefined, arrays, object maps, or nested {_skills}
+  // Normalize both sources
   const resourceSkills: Skill[] = this.normalizeSkillsBag(main.Skills ? main.Skills._skills ?? main.Skills : []);
   const combatSkills:  Skill[] = this.normalizeSkillsBag(main.Combat ? main.Combat._skills ?? main.Combat : []);
 
-  // Merge and bail early if empty
   const allSkills: Skill[] = resourceSkills.concat(combatSkills);
   if (allSkills.length === 0) return;
 
   const now = Date.now();
-    console.debug('[XP Orbs] skills shapes', { resLen: resourceSkills.length, cmbLen: combatSkills.length });
+  // console.debug('[XP Orbs] skills shapes', { resLen: resourceSkills.length, cmbLen: combatSkills.length });
+
   for (let i = 0; i < allSkills.length; i++) {
     const s = allSkills[i];
-    // extra guard in case normalize missed something weird
     if (!this.isValidSkill(s)) continue;
 
-    // Lookup the display name; fall back to the numeric id if lookup table is missing
+    // Resolve a stable key/display name
     const skillNameLookup =
       (this.gameLookups && this.gameLookups['Skills'] && this.gameLookups['Skills'][s._skill]) ||
       String(s._skill);
     const skillKey: string = skillNameLookup;
 
-    // delta detection
+    // delta detection (skip if no new XP)
     const last = this.prevXp.has(skillKey) ? this.prevXp.get(skillKey)! : s._xp;
     const delta = s._xp - last;
     this.prevXp.set(skillKey, s._xp);
     if (delta <= 0) continue;
 
+    // ensure orb/state exists
     const orb = this.ensureOrb(skillKey);
 
-    // level boundaries with safe fallbacks
-    const curFloor = this.levelToXP[s._level] ?? 0;
+    // level boundaries
+    const curFloor  = this.levelToXP[s._level] ?? 0;
     const nextFloor = this.levelToXP[s._level + 1] ?? curFloor;
     const span = Math.max(1, nextFloor - curFloor);
     const into = Math.max(0, s._xp - curFloor);
 
+    // update state
     orb.currentLevel = s._level;
-    orb.totalXp = s._xp;
-    orb.progress01 = Math.min(1, into / span);
-    orb.toNext = Math.max(0, nextFloor - s._xp);
+    orb.totalXp      = s._xp;
+    orb.progress01   = Math.min(1, into / span);
+    orb.toNext       = Math.max(0, nextFloor - s._xp);
 
-    // XP/hr window
+    // ------- PER-SKILL TIMING & EMA (starts on first gain for this skill) -------
+    if (orb.startTs == null) {
+      // snapshot BEFORE this tick so time/rate reflect this session of gains
+      orb.startTs = now;
+      orb.startXp = s._xp - Math.max(0, delta);
+      // seed EMA sampling
+      orb._lastSampleTs = now;
+      orb._lastSampleXp = s._xp;
+      orb.emaXpPerHour  = undefined;
+    } else {
+      // Update EMA using this event
+      this.updateOrbEmaFromEvent(orb, now);
+    }
+    // ---------------------------------------------------------------------------
+
+    // (Optional) keep your sample window if used elsewhere
     orb.samples.push({ xp: s._xp, t: now });
     this.gcSamples(orb, now);
 
-    // paint + keep-alive
-    this.renderOrb(orb);
-    this.resetFade(orb, now);
+    // paint + stats text + keep-alive
+    this.renderOrb(orb);             // ring, level, colors, etc.
+    this.renderOrbStatsFor(orb);     // uses per-skill EMA & startTs
+    this.resetFade(orb, now);        // per-orb keep-alive
   }
 }
 
@@ -535,6 +559,7 @@ private onMouseLeave(): void {
       totalXp: 0, currentLevel: 1, toNext: 0, progress01: 0,
       samples: [],
       lastActivityMs: Date.now(),
+        
     };
     this.orbs.set(skillName, state);
     return state;
@@ -574,7 +599,7 @@ private onMouseLeave(): void {
             if (toRow)  toRow.classList.add('is-hidden');
         } else {
             const pctToNext = (100 - prog).toFixed(1); // or show remaining percent
-            if (headerRight) headerRight.textContent = `(${prog.toFixed(1)}% to Next)`;
+            if (headerRight) headerRight.textContent = `(${pctToNext}% to Next)`;
             if (toRow)  toRow.classList.remove('is-hidden');
             if (toNode) toNode.textContent = abbreviateValue(Math.max(0, Math.floor(orb.toNext)));
         }
@@ -594,6 +619,43 @@ private onMouseLeave(): void {
 
   }
 
+private renderOrbStatsFor(orb: OrbState): void {
+  if (!orb.tooltip) return;
+
+  const isMaxed = (orb.currentLevel ?? 0) >= 100;
+  const prog    = isMaxed ? 1 : Math.max(0, Math.min(1, orb.progress01 ?? 0));
+
+  const curNode = orb.tooltip.querySelector('[data-k="cur"]')  as HTMLElement | null;
+  const toNode  = orb.tooltip.querySelector('[data-k="to"]')   as HTMLElement | null;
+  const hrNode  = orb.tooltip.querySelector('[data-k="xphr"]') as HTMLElement | null;
+  const ttNode  = orb.tooltip.querySelector('[data-k="ttl"]')  as HTMLElement | null;
+  const progHdr = orb.tooltip.querySelector('.tip-progress')   as HTMLElement | null;
+  const toRow   = orb.tooltip.querySelector('.row-xpToLevel')  as HTMLElement | null;
+
+  if (progHdr) progHdr.textContent = isMaxed ? 'Maxed' : `(${((1 - prog) * 100).toFixed(1)}% to Next)`;
+  if (curNode) curNode.textContent = abbreviateValue(orb.totalXp ?? 0);
+
+  if (toRow) toRow.style.display = isMaxed ? 'none' : '';
+  if (toNode) toNode.textContent = isMaxed ? '' : abbreviateValue(Math.max(0, Math.floor(orb.toNext ?? 0)));
+
+  const xphr = this.getSkillXpPerHour(orb, Date.now());
+  if (hrNode) {
+    hrNode.textContent = Number.isFinite(xphr) && xphr > 0
+      ? abbreviateValue(Math.floor(xphr))
+      : 'NaN';
+  }
+
+  if (ttNode) {
+    if (isMaxed || !Number.isFinite(xphr) || xphr <= 0) {
+      ttNode.textContent = 'NaN';
+    } else {
+      const toNext = Math.max(0, orb.toNext ?? 0);
+      const seconds = toNext === 0 ? 0 : (toNext * 3600) / xphr;
+      ttNode.textContent = this.formatHMS(seconds);
+    }
+  }
+}
+
   // ===== XP/hr window =====
   private gcSamples(orb: OrbState, now: number) {
     const cutoff = now - 5 * 60_000; // 5 minutes
@@ -607,6 +669,24 @@ private onMouseLeave(): void {
     if (last.t <= first.t) return 0;
     return ((last.xp - first.xp) / (last.t - first.t)) * 3_600_000;
   }
+
+  private statsTimer?: number;
+
+private startStatsLoop(): void {
+  if (this.statsTimer) return;
+  this.statsTimer = window.setInterval(() => {
+    const now = Date.now();
+    this.orbs.forEach(orb => this.updateOrbEmaFromEvent(orb, now));
+    // also refresh numbers so tooltips stay current even without new gains
+    this.orbs.forEach(orb => this.renderOrbStatsFor(orb));
+  }, 1000);
+}
+
+private stopStatsLoop(): void {
+  if (!this.statsTimer) return;
+  clearInterval(this.statsTimer);
+  this.statsTimer = undefined;
+}
 
   // ===== Fade lifecycle =====
   private resetFade(orb: OrbState, now: number) {
@@ -881,4 +961,44 @@ private updateOrbSizes(n: unknown): void {
   private titleCase(s: string): string {
     return s.replace(/\b\w/g, function (m) { return m.toUpperCase(); });
   }
+
+  private updateOrbEmaFromEvent(orb: OrbState, nowMs: number): void {
+  if (orb._lastSampleTs == null || orb._lastSampleXp == null) {
+    orb._lastSampleTs = nowMs;
+    orb._lastSampleXp = orb.totalXp ?? 0;
+    return;
+  }
+  const dtMs = nowMs - orb._lastSampleTs;
+  if (dtMs < 250) return; // avoid noisy tiny intervals
+
+  const dxp   = (orb.totalXp ?? 0) - orb._lastSampleXp;
+  const hours = dtMs / 3_600_000;
+  const inst  = hours > 0 ? (dxp / hours) : NaN;
+
+  const TAU_SECONDS = 30; // smoothing constant (lower = snappier)
+  const alpha = Math.max(0, Math.min(1, dtMs / (TAU_SECONDS * 1000)));
+
+  if (Number.isFinite(inst)) {
+    orb.emaXpPerHour = (orb.emaXpPerHour == null)
+      ? inst
+      : (alpha * inst + (1 - alpha) * orb.emaXpPerHour);
+  }
+
+  orb._lastSampleTs = nowMs;
+  orb._lastSampleXp = orb.totalXp ?? 0;
+}
+
+// Prefer EMA; fallback to average since first gain for THIS skill
+private getSkillXpPerHour(orb: OrbState, nowMs: number): number {
+  if (Number.isFinite(orb.emaXpPerHour as number) && (orb.emaXpPerHour as number) > 0) {
+    return orb.emaXpPerHour as number;
+  }
+  if (orb.startTs == null || orb.startXp == null) return NaN;
+  const dtHours = (nowMs - orb.startTs) / 3_600_000;
+  if (dtHours <= 0) return NaN;
+  const gained = (orb.totalXp ?? 0) - orb.startXp;
+  if (gained <= 0) return NaN;
+  return gained / dtHours;
+}
+
 }
