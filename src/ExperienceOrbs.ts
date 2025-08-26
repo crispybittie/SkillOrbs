@@ -50,6 +50,10 @@ export default class ExperienceOrbs extends Plugin {
   private onMouseLeaveBound: ((e: MouseEvent) => void) | null = null;
   private hoverRaf = 0;
 
+    private readonly INNER_CORE_SCALE_INT = 70; // %
+    private readonly RING_THICKNESS_INT   = 4;  // % of radius
+
+
   // ===== HighSpell level table (COPY YOUR FULL MAP HERE) =====
   private levelToXP: Record<number, number> = {
         1: 0,
@@ -176,21 +180,30 @@ private getDefaultSettings(): (Record<string, PluginSettings> & { enable: Plugin
     showXpToLevel: { type: SettingsTypes.checkbox, text: 'Show XP to Level', value: true,
       callback: () => this.updateTooltipVisibility() },
 
+    showTimeToLevel: {
+    type: SettingsTypes.checkbox,
+    text: 'Show Time to Level',
+    value: true,
+    callback: () => this.updateTooltipVisibility(),
+    },
+
     showXpHr:      { type: SettingsTypes.checkbox, text: 'Show XP/hr',       value: true,
       callback: () => this.updateTooltipVisibility() },
 
     fadeSeconds:   { type: SettingsTypes.range,    text: 'Fade After (seconds)', value: 5, min: 1,  max: 20,
       callback: () => this.resetAllFadeTimers() },
 
-    ringThickness: {
+/*    
+ringThickness: {
   type: SettingsTypes.range,
   text: 'Outer Ring Thickness',
   value: 10,   // percent-of-radius; 10 -> 0.10
   min: 4,      // 4% .. 18%
   max: 18,
   callback: (v: number) => this.updateRingThickness(this.toNum(v, 10)),
-},
+}, */
 
+/*
 innerCoreScale: {
   type: SettingsTypes.range,
   text: 'Inner Core Scale',
@@ -198,7 +211,7 @@ innerCoreScale: {
   min: 70,
   max: 95,
   callback: (v: number) => this.updateInnerCoreScale(this.toNum(v, 82)),
-},
+}, */
 
 orbSize: {
   type: SettingsTypes.range,
@@ -414,8 +427,8 @@ private onMouseLeave(): void {
 
   private refreshLayoutFromSettings(): void {
   this.updateOrbSizes(this.getOrbSize());
-  this.updateRingThickness(this.getRingThickness());
-  this.updateInnerCoreScale(this.getInnerCoreScale());
+ /* this.updateRingThickness(this.getRingThickness());
+  this.updateInnerCoreScale(this.getInnerCoreScale()); */
   this.updateTooltipVisibility();
   this.resetAllFadeTimers();
   this.updateIconSizes();
@@ -428,8 +441,9 @@ private onMouseLeave(): void {
     const root = document.createElement('div');
     // initialize CSS vars (fractions)
     root.style.setProperty('--size', this.getOrbSize() + 'px');
-    root.style.setProperty('--innerScale', String(this.getInnerCoreScale()));   // 0.70..0.95
-    root.style.setProperty('--thickness',  String(this.getRingThickness()));    // 0.04..0.18
+    root.style.setProperty('--innerScale', String(this.getInnerCoreScale())); // 0.70
+    root.style.setProperty('--thickness',  String(this.getRingThickness()));  // 0.04
+
 
 
 // after creating `root` in ensureOrb(...)
@@ -486,19 +500,22 @@ private onMouseLeave(): void {
     const tip = document.createElement('div');
     tip.className = 'hl-xp-orb__tip';
     tip.innerHTML = `
-        <div class="hl-xp-orb__tip-header">
-            <span class="tip-skill">${this.titleCase(skillName)}</span>
-            <span class="tip-progress">(0.0% to Next)</span>
-        </div>
-        <div class="hl-xp-orb__tip-row${this.settings.showCurrentXp.value ? '' : ' is-hidden'}">
-            <span>Current XP</span><span data-k="cur">0</span>
-        </div>
-        <div class="hl-xp-orb__tip-row row-xpToLevel${this.settings.showXpToLevel.value ? '' : ' is-hidden'}">
-            <span>XP to Level</span><span data-k="to">0</span>
-        </div>
-        <div class="hl-xp-orb__tip-row${this.settings.showXpHr.value ? '' : ' is-hidden'}">
-            <span>XP/hr</span><span data-k="xphr">0</span>
-        </div>
+  <div class="hl-xp-orb__tip-header">
+    <span class="tip-skill">${this.titleCase(skillName)}</span>
+    <span class="tip-progress">(0% to Next)</span>
+  </div>
+  <div class="hl-xp-orb__tip-row${this.settings.showCurrentXp.value ? '' : ' is-hidden'}">
+    <span>Current XP</span><span data-k="cur">0</span>
+  </div>
+  <div class="hl-xp-orb__tip-row row-xpToLevel${this.settings.showXpToLevel.value ? '' : ' is-hidden'}">
+    <span>XP to Level</span><span data-k="to">0</span>
+  </div>
+  <div class="hl-xp-orb__tip-row row-timeToLevel${this.settings.showTimeToLevel.value ? '' : ' is-hidden'}">
+    <span>Time to Level</span><span data-k="ttl">NaN</span>
+  </div>
+  <div class="hl-xp-orb__tip-row${this.settings.showXpHr.value ? '' : ' is-hidden'}">
+    <span>XP/hr</span><span data-k="xphr">NaN</span>
+  </div>
         `;
 
     root.appendChild(ring);
@@ -531,17 +548,18 @@ private onMouseLeave(): void {
     orb.root.style.setProperty('--ringPct', String(prog));
 
     // Map 0..1 -> hue 0..120 (muted red to muted green), low saturation for “muted”
-    const hue = Math.round(120 * orb.progress01);       // 0 = red, 120 = green
-    const sat = 42;                                      // muted
-    const light = 46;                                    // mid
-    const ringColor = `hsl(${hue} ${sat}% ${light}%)`;
-    orb.root.style.setProperty('--ringColor', ringColor);
+    const hue = Math.round(120 * prog);
+    orb.root.style.setProperty('--ringColor', `hsl(${hue} 60% 45%)`);
+
 
     orb.levelBadge.textContent = String(orb.currentLevel);
 
     const curNode = orb.tooltip.querySelector('[data-k="cur"]') as HTMLElement | null;
     const toNode  = orb.tooltip.querySelector('[data-k="to"]')  as HTMLElement | null;
     const hrNode  = orb.tooltip.querySelector('[data-k="xphr"]') as HTMLElement | null;
+
+    const timeNode  = orb.tooltip.querySelector('[data-k="ttl"]')  as HTMLElement | null;
+
 
     const headerRight  = orb.tooltip.querySelector('.tip-progress') as HTMLElement | null;
     if (headerRight) headerRight.textContent = isMaxed ? 'Maxed' : `(${Math.round(prog * 100)}% to Next)`;
@@ -561,8 +579,19 @@ private onMouseLeave(): void {
             if (toNode) toNode.textContent = abbreviateValue(Math.max(0, Math.floor(orb.toNext)));
         }
 
-    const xphr = Math.floor(this.getXpPerHour(orb, Date.now()));
-    if (hrNode) hrNode.textContent = abbreviateValue(xphr);
+    const xphr = this.getXpPerHour(orb, Date.now());
+    if (hrNode) hrNode.textContent = Number.isFinite(xphr) && xphr > 0 ? abbreviateValue(Math.floor(xphr)) : 'NaN';
+
+
+    if (timeNode) {
+  if (isMaxed || !Number.isFinite(xphr) || xphr <= 0) {
+    timeNode.textContent = 'NaN';
+  } else {
+    const seconds = (orb.toNext <= 0) ? 0 : (orb.toNext * 3600) / xphr; // xp/hr → seconds
+    timeNode.textContent = this.formatHMS(seconds);
+  }
+}
+
   }
 
   // ===== XP/hr window =====
@@ -633,6 +662,7 @@ private onMouseLeave(): void {
   private updateTooltipVisibility(): void {
     const showCur = !!this.settings.showCurrentXp.value;
     const showTo  = !!this.settings.showXpToLevel.value;
+    const showTime = !!this.settings.showTimeToLevel.value;
     const showHr  = !!this.settings.showXpHr.value;
 
     this.orbs.forEach(orb => {
@@ -640,19 +670,21 @@ private onMouseLeave(): void {
       rows.forEach(row => row.classList.remove('is-hidden'));
       const curRow = orb.tooltip.querySelector('.hl-xp-orb__tip-row:nth-of-type(2)') as HTMLElement | null;
       const toRow  = orb.tooltip.querySelector('.hl-xp-orb__tip-row:nth-of-type(3)') as HTMLElement | null;
-      const hrRow  = orb.tooltip.querySelector('.hl-xp-orb__tip-row:nth-of-type(4)') as HTMLElement | null;
+      const timeRow  = orb.tooltip.querySelector('.hl-xp-orb__tip-row:nth-of-type(4)') as HTMLElement | null;
+      const hrRow  = orb.tooltip.querySelector('.hl-xp-orb__tip-row:nth-of-type(5)') as HTMLElement | null;
       if (curRow && !showCur) curRow.classList.add('is-hidden');
       if (toRow  && !showTo)  toRow.classList.add('is-hidden');
+      if (timeRow  && !showTime)  timeRow.classList.add('is-hidden');
       if (hrRow  && !showHr)  hrRow.classList.add('is-hidden');
     });
   }
 
-  private updateRingThickness(t: unknown): void {
+/*  private updateRingThickness(t: unknown): void {
   const thick = typeof t === 'number' ? t : this.getRingThickness();
   this.orbs.forEach(orb => orb.root.style.setProperty('--thickness', String(thick)));
-}
+} */
 private updateIconSizes(): void {
-  const innerPx = Math.floor(this.getOrbSize() * this.getInnerCoreScale());
+  const innerPx = Math.floor(this.getOrbSize() * this.getInnerCoreScale()); // fixed 0.70
   const iconPx  = Math.floor(innerPx * 0.62);
   this.orbs.forEach(o => { o.icon.style.fontSize = iconPx + 'px'; });
 }
@@ -663,11 +695,11 @@ private updateOrbSizes(n: unknown): void {
   this.updateIconSizes();
 }
 
-private updateInnerCoreScale(v: unknown): void {
+/* private updateInnerCoreScale(v: unknown): void {
   const core = typeof v === 'number' ? v : this.getInnerCoreScale();
   this.orbs.forEach(o => o.root.style.setProperty('--innerScale', String(core))); // 👈 use --innerScale
   this.updateIconSizes();
-}
+} */
 
 
 
@@ -716,23 +748,20 @@ private updateInnerCoreScale(v: unknown): void {
 }
 .hl-xp-orb.is-fading{ opacity:0; transform:translateY(-4px); }
 
-/* progress ring: true thickness, color-coded by --ringColor */
-.hl-xp-orb__ring {
-  position: absolute; inset: 0; border-radius: 50%;
+/* progress ring: */
+.hl-xp-orb__ring{
+  position:absolute; inset:0; border-radius:50%;
+  /* conic progress with a neutral remainder */
   background: conic-gradient(
-    var(--ringColor, hsl(0,60%,45%)) calc(var(--ringPct,0) * 100%),
+    var(--ringColor, hsl(0,60%,45%)) calc(var(--ringPct,0)*100%),
     rgba(0,0,0,0.20) 0
   );
-
-  /* hard-edge clipping into a ring */
-  
-
-  /* simpler alternative if you don’t want path math: */
-  clip-path: circle(50% at 50% 50%) content-box; 
-     padding: calc(var(--size) * var(--thickness));
-     box-sizing: border-box;
-  
-  box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+  /* cut the inner hole via padding; thickness = --size * --thickness */
+  box-sizing: border-box;
+  padding: calc(var(--size) * var(--thickness));
+  /* keep it a circle and clip hard edge (no inward gradient) */
+  clip-path: circle(50% at 50% 50%);
+  box-shadow: 0 1px 4px rgba(0,0,0,.25);
 }
 
 /* core: solid dark disc (no inward gradient) */
@@ -819,8 +848,19 @@ private updateInnerCoreScale(v: unknown): void {
         return Number.isFinite(n) ? n : fallback;
     }
 
-    private getRingThickness(): number  { return this.toNum(this.settings.ringThickness.value, 10) / 100; }
-    private getInnerCoreScale(): number { return this.toNum(this.settings.innerCoreScale.value, 82) / 100; }
+    private formatHMS(totalSeconds: number): string {
+            if (!Number.isFinite(totalSeconds) || totalSeconds < 0) return 'NaN';
+            const s = Math.floor(totalSeconds % 60);
+            const m = Math.floor((totalSeconds / 60) % 60);
+            const h = Math.floor(totalSeconds / 3600);
+            const mm = m.toString().padStart(2, '0');
+            const ss = s.toString().padStart(2, '0');
+            return `${h}:${mm}:${ss}`; // 1 or 2 or 3+ digits for hours automatically
+        }
+
+    private getInnerCoreScale(): number { return this.INNER_CORE_SCALE_INT / 100; } // 0.70
+    private getRingThickness(): number  { return this.RING_THICKNESS_INT   / 100; } // 0.04
+
     private getOrbSize(): number        { return this.toNum(this.settings.orbSize.value, 56); }
     private getOrbSizeCss(): string     { return this.getOrbSize() + 'px'; }
 
