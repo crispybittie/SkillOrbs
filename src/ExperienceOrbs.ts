@@ -177,26 +177,26 @@ export default class ExperienceOrbs extends Plugin {
   
 private getDefaultSettings(): (Record<string, PluginSettings> & { enable: PluginSettings }) {
   return {
-    enable:        { type: SettingsTypes.checkbox, text: 'Enable XP Orbs', value: true,
+    enable:        { type: SettingsTypes.checkbox, text: 'Experience Orbs', value: true,
       callback: (v: boolean) => { if (!v) this.hideAllOrbs(); else this.refreshLayoutFromSettings(); } },
 
-    showCurrentXp: { type: SettingsTypes.checkbox, text: 'Show Current XP',  value: true,
+    showCurrentXp: { type: SettingsTypes.checkbox, text: 'Current XP',  value: true,
       callback: () => this.updateTooltipVisibility() },
 
-    showXpToLevel: { type: SettingsTypes.checkbox, text: 'Show XP to Level', value: true,
+    showXpToLevel: { type: SettingsTypes.checkbox, text: 'XP to Level', value: true,
       callback: () => this.updateTooltipVisibility() },
 
     showTimeToLevel: {
     type: SettingsTypes.checkbox,
-    text: 'Show Time to Level',
+    text: 'Time to Level',
     value: true,
     callback: () => this.updateTooltipVisibility(),
     },
 
-    showXpHr:      { type: SettingsTypes.checkbox, text: 'Show XP/hr',       value: true,
+    showXpHr:      { type: SettingsTypes.checkbox, text: 'XP/hr',       value: true,
       callback: () => this.updateTooltipVisibility() },
 
-    fadeSeconds:   { type: SettingsTypes.range,    text: 'Fade After (seconds)', value: 5, min: 1,  max: 20,
+    fadeSeconds:   { type: SettingsTypes.range,    text: 'Fade (seconds)', value: 5, min: 1,  max: 20,
       callback: () => this.resetAllFadeTimers() },
 
 /*    
@@ -526,21 +526,26 @@ private onMouseLeave(): void {
     tip.innerHTML = `
   <div class="hl-xp-orb__tip-header">
     <span class="tip-skill">${this.titleCase(skillName)}</span>
-    <span class="tip-progress">(0% to Next)</span>
+    <span class="tip-progress">(0.0% to Next)</span>
   </div>
-  <div class="hl-xp-orb__tip-row${this.settings.showCurrentXp.value ? '' : ' is-hidden'}">
+
+  <div class="hl-xp-orb__tip-row" data-row="cur">
     <span>Current XP</span><span data-k="cur">0</span>
   </div>
-  <div class="hl-xp-orb__tip-row row-xpToLevel${this.settings.showXpToLevel.value ? '' : ' is-hidden'}">
+
+  <div class="hl-xp-orb__tip-row" data-row="to">
     <span>XP to Level</span><span data-k="to">0</span>
   </div>
-  <div class="hl-xp-orb__tip-row row-timeToLevel${this.settings.showTimeToLevel.value ? '' : ' is-hidden'}">
+
+  <div class="hl-xp-orb__tip-row" data-row="ttl">
     <span>Time to Level</span><span data-k="ttl">NaN</span>
   </div>
-  <div class="hl-xp-orb__tip-row${this.settings.showXpHr.value ? '' : ' is-hidden'}">
+
+  <div class="hl-xp-orb__tip-row" data-row="xphr">
     <span>XP/hr</span><span data-k="xphr">NaN</span>
   </div>
-        `;
+`;
+    
 
     root.appendChild(ring);
     root.appendChild(core);
@@ -561,83 +566,60 @@ private onMouseLeave(): void {
       lastActivityMs: Date.now(),
         
     };
+
+    // apply current settings to this new orb
+    this.applyTooltipVisibility(state);
+
     this.orbs.set(skillName, state);
     return state;
   }
 
-  private renderOrb(orb: OrbState) {
-    // Force 100% fill and "Maxed" semantics at level 100
-    const isMaxed = orb.currentLevel >= 100;
-    const prog = isMaxed ? 1 : Math.max(0, Math.min(1, orb.progress01));
+  private renderOrb(orb: OrbState): void {
+  // 1) Paint ring + level
+  const isMaxed = (orb.currentLevel ?? 0) >= 100;
+  const prog = isMaxed ? 1 : Math.max(0, Math.min(1, orb.progress01 ?? 0));
 
-    orb.root.style.setProperty('--ringPct', String(prog));
+  // ring progress + hue (red→green)
+  orb.root.style.setProperty('--ringPct', String(prog));
+  const hue = Math.round(120 * prog);
+  orb.root.style.setProperty('--ringColor', `hsl(${hue} 60% 45%)`);
 
-    // Map 0..1 -> hue 0..120 (muted red to muted green), low saturation for “muted”
-    const hue = Math.round(120 * prog);
-    orb.root.style.setProperty('--ringColor', `hsl(${hue} 60% 45%)`);
+  // level text
+  orb.levelBadge.textContent = String(orb.currentLevel ?? 0);
 
+  // 2) Stats/tooltip text (uses per-skill EMA + startTs; handles NaN/maxed)
+  this.renderOrbStatsFor(orb);
 
-    orb.levelBadge.textContent = String(orb.currentLevel);
-
-    const curNode = orb.tooltip.querySelector('[data-k="cur"]') as HTMLElement | null;
-    const toNode  = orb.tooltip.querySelector('[data-k="to"]')  as HTMLElement | null;
-    const hrNode  = orb.tooltip.querySelector('[data-k="xphr"]') as HTMLElement | null;
-
-    const timeNode  = orb.tooltip.querySelector('[data-k="ttl"]')  as HTMLElement | null;
-
-
-    const headerRight  = orb.tooltip.querySelector('.tip-progress') as HTMLElement | null;
-    if (headerRight) headerRight.textContent = isMaxed ? 'Maxed' : `(${Math.round(prog * 100)}% to Next)`;
-
-    
-    const toRow   = orb.tooltip.querySelector('.row-xpToLevel') as HTMLElement | null;
-    if (toRow) toRow.style.display = isMaxed ? 'none' : '';
-
-    if (curNode) curNode.textContent = abbreviateValue(orb.totalXp);
-    if (isMaxed) {
-        if (headerRight) headerRight.textContent = 'Maxed';
-            if (toRow)  toRow.classList.add('is-hidden');
-        } else {
-            const pctToNext = (100 - prog).toFixed(1); // or show remaining percent
-            if (headerRight) headerRight.textContent = `(${pctToNext}% to Next)`;
-            if (toRow)  toRow.classList.remove('is-hidden');
-            if (toNode) toNode.textContent = abbreviateValue(Math.max(0, Math.floor(orb.toNext)));
-        }
-
-    const xphr = this.getXpPerHour(orb, Date.now());
-    if (hrNode) hrNode.textContent = Number.isFinite(xphr) && xphr > 0 ? abbreviateValue(Math.floor(xphr)) : 'NaN';
-
-
-    if (timeNode) {
-  if (isMaxed || !Number.isFinite(xphr) || xphr <= 0) {
-    timeNode.textContent = 'NaN';
-  } else {
-    const seconds = (orb.toNext <= 0) ? 0 : (orb.toNext * 3600) / xphr; // xp/hr → seconds
-    timeNode.textContent = this.formatHMS(seconds);
-  }
+  // 3) Visibility rules (settings + maxed rows)
+  this.applyTooltipVisibility(orb);
 }
 
-  }
 
 private renderOrbStatsFor(orb: OrbState): void {
   if (!orb.tooltip) return;
 
   const isMaxed = (orb.currentLevel ?? 0) >= 100;
-  const prog    = isMaxed ? 1 : Math.max(0, Math.min(1, orb.progress01 ?? 0));
+  const prog = isMaxed ? 1 : Math.max(0, Math.min(1, orb.progress01 ?? 0));
 
   const curNode = orb.tooltip.querySelector('[data-k="cur"]')  as HTMLElement | null;
   const toNode  = orb.tooltip.querySelector('[data-k="to"]')   as HTMLElement | null;
   const hrNode  = orb.tooltip.querySelector('[data-k="xphr"]') as HTMLElement | null;
   const ttNode  = orb.tooltip.querySelector('[data-k="ttl"]')  as HTMLElement | null;
   const progHdr = orb.tooltip.querySelector('.tip-progress')   as HTMLElement | null;
-  const toRow   = orb.tooltip.querySelector('.row-xpToLevel')  as HTMLElement | null;
 
+  // Header: (% to Next) — remaining, not completed
   if (progHdr) progHdr.textContent = isMaxed ? 'Maxed' : `(${((1 - prog) * 100).toFixed(1)}% to Next)`;
+
+  // Current XP
   if (curNode) curNode.textContent = abbreviateValue(orb.totalXp ?? 0);
 
-  if (toRow) toRow.style.display = isMaxed ? 'none' : '';
-  if (toNode) toNode.textContent = isMaxed ? '' : abbreviateValue(Math.max(0, Math.floor(orb.toNext ?? 0)));
+  // XP to Level
+  if (toNode) {
+    const toNext = Math.max(0, Math.floor(orb.toNext ?? 0));
+    toNode.textContent = isMaxed ? '' : abbreviateValue(toNext);
+  }
 
+  // XP/hr (per-skill EMA or avg since first gain)
   const xphr = this.getSkillXpPerHour(orb, Date.now());
   if (hrNode) {
     hrNode.textContent = Number.isFinite(xphr) && xphr > 0
@@ -645,6 +627,7 @@ private renderOrbStatsFor(orb: OrbState): void {
       : 'NaN';
   }
 
+  // Time to Level (from per-skill xphr)
   if (ttNode) {
     if (isMaxed || !Number.isFinite(xphr) || xphr <= 0) {
       ttNode.textContent = 'NaN';
@@ -739,25 +722,41 @@ private stopStatsLoop(): void {
   }
 
   // ===== Settings-driven style updates =====
-  private updateTooltipVisibility(): void {
-    const showCur = !!this.settings.showCurrentXp.value;
-    const showTo  = !!this.settings.showXpToLevel.value;
-    const showTime = !!this.settings.showTimeToLevel.value;
-    const showHr  = !!this.settings.showXpHr.value;
+private isSettingOn(key: keyof typeof this.settings): boolean {
+  const s = this.settings[key as string];
+  return !!(s && typeof s.value !== 'undefined' && s.value);
+}
 
-    this.orbs.forEach(orb => {
-      const rows = orb.tooltip.querySelectorAll('.hl-xp-orb__tip-row');
-      rows.forEach(row => row.classList.remove('is-hidden'));
-      const curRow = orb.tooltip.querySelector('.hl-xp-orb__tip-row:nth-of-type(2)') as HTMLElement | null;
-      const toRow  = orb.tooltip.querySelector('.hl-xp-orb__tip-row:nth-of-type(3)') as HTMLElement | null;
-      const timeRow  = orb.tooltip.querySelector('.hl-xp-orb__tip-row:nth-of-type(4)') as HTMLElement | null;
-      const hrRow  = orb.tooltip.querySelector('.hl-xp-orb__tip-row:nth-of-type(5)') as HTMLElement | null;
-      if (curRow && !showCur) curRow.classList.add('is-hidden');
-      if (toRow  && !showTo)  toRow.classList.add('is-hidden');
-      if (timeRow  && !showTime)  timeRow.classList.add('is-hidden');
-      if (hrRow  && !showHr)  hrRow.classList.add('is-hidden');
-    });
-  }
+// Applies visibility for ONE orb (used on creation and during updates)
+private applyTooltipVisibility(orb: OrbState): void {
+  if (!orb || !orb.tooltip) return;
+
+  const isMaxed = (orb.currentLevel ?? 0) >= 100;
+
+  const curRow = orb.tooltip.querySelector('[data-row="cur"]')  as HTMLElement | null;
+  const toRow  = orb.tooltip.querySelector('[data-row="to"]')   as HTMLElement | null;
+  const ttlRow = orb.tooltip.querySelector('[data-row="ttl"]')  as HTMLElement | null;
+  const hrRow  = orb.tooltip.querySelector('[data-row="xphr"]') as HTMLElement | null;
+
+  // Current XP
+  if (curRow) curRow.classList.toggle('is-hidden', !this.isSettingOn('showCurrentXp'));
+
+  // XP to Level — force hidden if maxed
+  const showTo = this.isSettingOn('showXpToLevel') && !isMaxed;
+  if (toRow) toRow.classList.toggle('is-hidden', !showTo);
+
+  // Time to Level — also hidden when maxed (spec), regardless of NaN vs value
+  const showTTL = this.isSettingOn('showTimeToLevel') && !isMaxed;
+  if (ttlRow) ttlRow.classList.toggle('is-hidden', !showTTL);
+
+  // XP/hr — independent of maxed, allowed to show NaN
+  if (hrRow) hrRow.classList.toggle('is-hidden', !this.isSettingOn('showXpHr'));
+}
+
+// Applies visibility to ALL existing orbs (called by settings callbacks)
+private updateTooltipVisibility(): void {
+  this.orbs.forEach((orb) => this.applyTooltipVisibility(orb));
+}
 
 /*  private updateRingThickness(t: unknown): void {
   const thick = typeof t === 'number' ? t : this.getRingThickness();
@@ -915,6 +914,9 @@ private updateOrbSizes(n: unknown): void {
   content:""; position:absolute; left:50%; bottom:100%; transform:translateX(-50%);
   border:6px solid transparent; border-bottom-color:rgba(0,0,0,.85);
 }
+
+
+.hl-xp-orb__tip-row.is-hidden { display: none !important; }
 `;
     const style = document.createElement('style');
     style.textContent = css;
