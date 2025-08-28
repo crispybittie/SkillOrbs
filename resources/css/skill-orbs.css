@@ -1,0 +1,193 @@
+/* Highlite Skill Orbs — Core Styles */
+.hl-skill-orbs {
+  pointer-events: none;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  width: max-content;
+  white-space: nowrap;
+  gap: 8px;
+}
+
+.hl-skill-orb {
+  position: relative;
+  pointer-events: auto;
+  width: var(--size);
+  height: var(--size);
+  transition: opacity 220ms ease, transform 220ms ease;
+  --outerR: calc(var(--size) / 2);
+  --innerDpx: calc(var(--size) * var(--innerScale));
+  --innerRpx: calc(var(--innerDpx) / 2);
+  --coreOpacity: 0.8; /* Default value, overridden by JS */
+}
+
+.hl-skill-orb.is-fading {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+.hl-skill-orb__ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    var(--ringColor, hsl(0, 60%, 45%)) calc(var(--ringPct, 0) * 100%),
+    rgba(0, 0, 0, 0.20) 0
+  );
+  box-sizing: border-box;
+  padding: calc(var(--size) * var(--thickness));
+  clip-path: circle(50% at 50% 50%);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+}
+
+.hl-skill-orb__core {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: #1b1b1b;
+  opacity: var(--coreOpacity, 0.8);
+  clip-path: circle(var(--innerRpx) at 50% 50%);
+}
+
+.hl-skill-orb__mask {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.70);
+  clip-path: circle(var(--innerRpx) at 50% 50%);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.hl-skill-orb.is-hover .hl-skill-orb__mask {
+  opacity: 1;
+}
+
+.hl-skill-orb__iconwrap {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: var(--innerDpx);
+  height: var(--innerDpx);
+  border-radius: 50%;
+  overflow: hidden;
+  overflow: clip;
+  clip-path: circle(50% at 50% 50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  contain: paint;
+}
+
+.hl-skill-orb__iconwrap .hs-stat-menu-item__icon {
+  width: 100%;
+  height: 100%;
+  background-size: contain;
+  background-position: center;
+}
+
+/* .hl-skill-orb__icon {
+  width: 100%;
+  height: 100%;
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: contain;             respect aspect; scale to fit inner core 
+  image-rendering: auto;               keep icons crisp
+  pointer-events: none;
+} */
+
+.hl-skill-orb.is-hover .hl-skill-orb__icon {
+  opacity: 0.25;
+}
+
+.hl-skill-orb__level {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-weight: 800;
+  font-size: calc(var(--size) * 0.38);
+  color: #ffd21e;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  opacity: 0;
+  z-index: 2;
+}
+
+.hl-skill-orb.is-hover .hl-skill-orb__level {
+  opacity: 1;
+}
+
+.hl-skill-orb__tip {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 8px);
+  transform: translateX(-50%) translateY(-2px);
+  min-width: 200px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.35;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+.hl-skill-orb.is-hover .hl-skill-orb__tip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.hl-skill-orb__tip-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+  font-weight: 700;
+}
+
+.hl-skill-orb__tip-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.hl-skill-orb__tip-row span:first-child {
+  text-align: left;
+}
+
+.hl-skill-orb__tip-row span:last-child {
+  text-align: right;
+  min-width: 96px;
+}
+
+.hl-skill-orb__tip::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 100%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-bottom-color: rgba(0, 0, 0, 0.85);
+}
+
+.hl-skill-orb__tip-row.is-hidden {
+  display: none !important;
+}
+
+.hs-icon-background {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
