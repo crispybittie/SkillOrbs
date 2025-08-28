@@ -10,6 +10,10 @@
   gap: 8px;
 }
 
+.hl-skill-orbs {
+  --offset: calc((var(--hs-canvas-width) - var(--hs-compass-button-right)) / 2);
+}
+
 .hl-skill-orb {
   position: relative;
   pointer-events: none;

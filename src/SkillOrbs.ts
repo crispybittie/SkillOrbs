@@ -165,9 +165,9 @@ export default class SkillOrbs extends Plugin {
   }
 
   start(): void {
-    this.injectStyles();
     this.setupRoot();
     
+    this.injectStyles();
     this.onMouseMoveBound = this.onMouseMove.bind(this);
     this.onMouseLeaveBound = this.onMouseLeave.bind(this);
     window.addEventListener('mousemove', this.onMouseMoveBound);
@@ -274,9 +274,6 @@ export default class SkillOrbs extends Plugin {
     
     const mask = document.getElementById('hs-screen-mask');
     if (mask) mask.appendChild(row); else console.log('COULD NOT APPEND TO MASK');
-
-    const style = document.createElement('style');
-    document.head.appendChild(style);
     
   }
 
@@ -571,19 +568,19 @@ private setupCanvasSizeMonitoring() {
     }
 
   private updateOrbsRowAlignment(orbsRow : HTMLDivElement): void {
+    
     if (this.settings.alignOrbs.value == "Whole Game Window") {
         orbsRow.style.left = '50%';
+        orbsRow.style.transform = 'translateX(-50%)';
+        orbsRow.classList.remove('align-compass');
         }
     else if (this.settings.alignOrbs.value == "Up To Compass") {
-          const canvas = document.getElementById('hs-screen-mask');
-          const orbsRow = this.orbsRow;
-            if (!canvas) return;
-            const canvasWidth = canvas.style.getPropertyValue('--hs-compass-button-right').trim()
-            if (orbsRow) {
-                const compassX = orbsRow.style.getPropertyValue('--canvasWidth').trim();
-            orbsRow.style.left = `calc((${canvasWidth} - (${compassX} + 6px))/2)`;}
-    }
-    this.orbsRow = orbsRow;
+        const canvasWidth = parseFloat(orbsRow.style.getPropertyValue('--canvasWidth'));
+        const compassRight = 212
+        const offset = (canvasWidth - compassRight) / 2;
+          orbsRow.style.left = `${offset}px`; // Use the CSS variable
+    orbsRow.style.transform = 'translateX(-50%)';
+    orbsRow.classList.add('align-compass');}
     return;
   }
 
