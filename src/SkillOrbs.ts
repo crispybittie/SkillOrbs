@@ -104,7 +104,7 @@ export default class SkillOrbs extends Plugin {
         value: "Whole Game Window",
         description: 'How to position orbs on the x-axis',
         options: options,
-        callback: (v: boolean) => {if (this.orbsRow) {this.updateOrbsRowAlignment(this.orbsRow)}}
+        callback: () => {if (this.orbsRow) {this.updateOrbsRowAlignment(this.orbsRow)}}
 
       },
 
@@ -261,16 +261,23 @@ export default class SkillOrbs extends Plugin {
     row.id = 'hl-skill-orbs';
     row.style.position = 'absolute';
     row.style.top = '6px';
+
+    this.setupCanvasSizeMonitoring();
     this.updateOrbsRowAlignment(row);
+    
     row.style.display = 'inline-flex';
     row.style.width = 'max-content';
     row.style.whiteSpace = 'nowrap';
     row.style.gap = '8px';
     row.style.pointerEvents = 'none';
 
+    
     const mask = document.getElementById('hs-screen-mask');
-    if (mask) mask.appendChild(row);
-    else console.log('COULD NOT APPEND TO MASK');
+    if (mask) mask.appendChild(row); else console.log('COULD NOT APPEND TO MASK');
+
+    const style = document.createElement('style');
+    document.head.appendChild(style);
+    
   }
 
   private cleanupRoot(): void {
@@ -279,6 +286,34 @@ export default class SkillOrbs extends Plugin {
     this.orbsRow = null;
     this.domRoot = null;
   }
+
+private setupCanvasSizeMonitoring() {
+  const canvas = document.getElementById('hs-screen-mask');
+  if (!canvas) return;
+  
+  let lastWidth = canvas.offsetWidth;
+  
+  // 1. ResizeObserver (modern browsers)
+  if (typeof ResizeObserver !== 'undefined') {
+    const resizeObserver = new ResizeObserver(entries => {
+      const width = entries[0].contentRect.width;
+      if (width !== lastWidth) {
+        lastWidth = width;
+        this.updateCanvasAlignment(width);
+      }
+    });
+    resizeObserver.observe(canvas);
+  } }
+
+  private updateCanvasAlignment(width) {
+    if (this.orbsRow) {
+        
+        this.orbsRow.style.setProperty('--canvasWidth',`${width}`);
+        this.updateOrbsRowAlignment(this.orbsRow);
+        
+    }
+    return;
+    }
 
   private ensureOrb(skillName: string): OrbState {
     if (this.orbs.has(skillName)) return this.orbs.get(skillName)!;
@@ -536,25 +571,17 @@ export default class SkillOrbs extends Plugin {
     }
 
   private updateOrbsRowAlignment(orbsRow : HTMLDivElement): void {
-    if (this.settings.alignOrbs.value = "Whole Game Window") {
-        if (!orbsRow.style.left) {
-            orbsRow.style.left = "50%";}
-        if (orbsRow.style.right) {
-            orbsRow.style.removeProperty("right")
+    if (this.settings.alignOrbs.value == "Whole Game Window") {
+        orbsRow.style.left = '50%';
         }
-        orbsRow.style.transform = 'translateX(-50%)';
-        }
-    else if (this.settings.alignOrbs.value = "Up To Compass") {
-        if (!orbsRow.style.right) {
-            orbsRow.style.right = "calc(var(--hs-compass-button-right) + 6px)";}
-        if (orbsRow.style.left) {
-            orbsRow.style.removeProperty("left")
-        }
-        orbsRow.style.transform = 'translateX(50%)';
+    else if (this.settings.alignOrbs.value == "Up To Compass") {
+        orbsRow.style.left = `calc((var(--canvasWidth) - (var(--hs-compass-button-right) + 6px))/2)`;
     }
     this.orbsRow = orbsRow;
     return;
   }
+
+  
 
   // ===== STATS & CALCULATIONS =====
   private startStatsLoop(): void {

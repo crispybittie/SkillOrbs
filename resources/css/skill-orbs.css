@@ -5,6 +5,8 @@
   display: inline-flex;
   width: max-content;
   white-space: nowrap;
+  left: 50%;
+  transform: translateX(-50%);
   gap: 8px;
 }
 
