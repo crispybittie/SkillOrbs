@@ -575,7 +575,13 @@ private setupCanvasSizeMonitoring() {
         orbsRow.style.left = '50%';
         }
     else if (this.settings.alignOrbs.value == "Up To Compass") {
-        orbsRow.style.left = `calc((var(--canvasWidth) - (var(--hs-compass-button-right) + 6px))/2)`;
+          const canvas = document.getElementById('hs-screen-mask');
+          const orbsRow = this.orbsRow;
+            if (!canvas) return;
+            const canvasWidth = canvas.style.getPropertyValue('--hs-compass-button-right').trim()
+            if (orbsRow) {
+                const compassX = orbsRow.style.getPropertyValue('--canvasWidth').trim();
+            orbsRow.style.left = `calc((${canvasWidth} - (${compassX} + 6px))/2)`;}
     }
     this.orbsRow = orbsRow;
     return;
