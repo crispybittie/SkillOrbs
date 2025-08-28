@@ -1,13 +1,13 @@
 {
-  "name": "ExperienceOrbs",
-  "packageManager": "yarn@4.9.1",
+  "name": "SkillOrbs",
+  "packageManager": "yarn@4.9.4",
   "engines": {
     "node": ">=22.0.0"
   },
   "scripts": {
     "build": "node build.mjs"
   },
-  "main": "src/ExperienceOrbs.ts",
+  "main": "src/SkillOrbs.ts",
   "devDependencies": {
     "esbuild": "^0.25.8",
     "typescript": "^5.8.3"

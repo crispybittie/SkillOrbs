@@ -36,8 +36,8 @@ type OrbState = {
   _lastSampleTs?: number;  // last sample time for EMA
 };
 
-export default class ExperienceOrbs extends Plugin {
-  pluginName = 'Experience Orbs';
+export default class SkillOrbs extends Plugin {
+  pluginName = 'Skill Orbs';
   author = 'Ellz';
 
   private uiManager!: UIManager;
@@ -177,7 +177,7 @@ export default class ExperienceOrbs extends Plugin {
   
 private getDefaultSettings(): (Record<string, PluginSettings> & { enable: PluginSettings }) {
   return {
-    enable:        { type: SettingsTypes.checkbox, text: 'Experience Orbs', value: true,
+    enable:        { type: SettingsTypes.checkbox, text: 'Skill Orbs', value: true,
       callback: (v: boolean) => { if (!v) this.hideAllOrbs(); else this.refreshLayoutFromSettings(); } },
 
     showCurrentXp: { type: SettingsTypes.checkbox, text: 'Current XP',  value: true,
