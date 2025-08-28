@@ -14,6 +14,8 @@ interface OrbState {
     root: HTMLDivElement;
     ring: HTMLDivElement;
     core: HTMLDivElement;
+    iconWrap: HTMLDivElement;
+    iconCenter: HTMLDivElement;
     icon: HTMLDivElement;
     levelBadge: HTMLDivElement;
     tooltip: HTMLDivElement;
@@ -39,7 +41,7 @@ type SkillName = string;
 // ===== CONSTANTS =====
 const CONSTANTS = {
   INNER_CORE_SCALE_INT: 70, // %
-  INNER_CORE_OPACITY: 0.8,
+  INNER_CORE_OPACITY: 1,
   RING_THICKNESS_INT: 4,    // % of radius
   DEFAULT_ORB_SIZE: 56,
   MIN_ORB_SIZE: 36,
@@ -81,6 +83,7 @@ export default class SkillOrbs extends Plugin {
   private onMouseLeaveBound: ((e: MouseEvent) => void) | null = null;
   private hoverRaf = 0;
   private statsTimer?: number;
+  private readonly HS_BASE_CELL_PX = 24;
 
   // ===== SETTINGS =====
   private getDefaultSettings(): (Record<string, PluginSettings> & { enable: PluginSettings }) {
@@ -122,8 +125,8 @@ export default class SkillOrbs extends Plugin {
         type: SettingsTypes.range,
         text: 'Fade (seconds)',
         value: 5,
-        min: 1,
-        max: 20,
+        min: 0,
+        max: 600,
         callback: () => this.resetAllFadeTimers()
       },
       orbSize: {
@@ -133,12 +136,6 @@ export default class SkillOrbs extends Plugin {
         min: CONSTANTS.MIN_ORB_SIZE,
         max: CONSTANTS.MAX_ORB_SIZE,
         callback: (v: number) => this.updateOrbSizes(this.toNum(v, CONSTANTS.DEFAULT_ORB_SIZE))
-      },
-      resetDefaults: {
-        type: SettingsTypes.button,
-        text: 'Reset to Defaults',
-        value: 'Reset',
-        callback: () => this.resetSettingsToDefaults()
       }
     };
   }
@@ -166,7 +163,7 @@ export default class SkillOrbs extends Plugin {
     
     this.refreshLayoutFromSettings();
     this.startStatsLoop();
-    this.log('Experience Orbs started');
+    this.log('Skill Orbs started');
   }
 
   stop(): void {
@@ -182,7 +179,7 @@ export default class SkillOrbs extends Plugin {
     
     cancelAnimationFrame(this.hoverRaf);
     this.stopStatsLoop();
-    this.log('Experience Orbs stopped');
+    this.log('Skill Orbs stopped');
   }
 
   // ===== GAME LOOP =====
@@ -249,7 +246,7 @@ export default class SkillOrbs extends Plugin {
 
     const row = document.createElement('div');
     this.orbsRow = row;
-    row.id = 'highlite-xp-orbs';
+    row.id = 'hl-skill-orbs';
     row.style.position = 'absolute';
     row.style.top = '6px';
     row.style.left = '50%';
@@ -262,7 +259,7 @@ export default class SkillOrbs extends Plugin {
 
     const mask = document.getElementById('hs-screen-mask');
     if (mask) mask.appendChild(row);
-    else document.body.appendChild(row);
+    else console.log('COULD NOT APPEND TO MASK');
   }
 
   private cleanupRoot(): void {
@@ -279,7 +276,7 @@ export default class SkillOrbs extends Plugin {
     root.style.setProperty('--size', this.getOrbSizeCss());
     root.style.setProperty('--innerScale', String(this.getInnerCoreScale()));
     root.style.setProperty('--coreOpacity', String(CONSTANTS.INNER_CORE_OPACITY)); // Add opacity variable
-    root.className = 'hl-xp-orb';
+    root.className = 'hl-skill-orb';
 
     if ((document as any).highlite?.managers?.UIManager?.bindOnClickBlockHsMask) {
       (document as any).highlite.managers.UIManager.bindOnClickBlockHsMask(root, () => {});
@@ -294,6 +291,8 @@ export default class SkillOrbs extends Plugin {
 
     const iconWrap = document.createElement('div');
     iconWrap.className = 'hl-skill-orb__iconwrap';
+    const iconCenter = document.createElement('div');
+    iconCenter.className = 'hl-skill-orb__iconcenter';
 
     const icon = document.createElement('div');
     icon.classList.add(
@@ -301,6 +300,7 @@ export default class SkillOrbs extends Plugin {
   'hs-stat-menu-item__icon',
   `hs-stat-menu-item__icon--${skillName.toLowerCase()}`
 );
+    icon.style.margin = '0';
 
     const levelBadge = document.createElement('div');
     levelBadge.className = 'hl-skill-orb__level';
@@ -332,8 +332,9 @@ export default class SkillOrbs extends Plugin {
 
     root.appendChild(ring);
     root.appendChild(core);
+    iconCenter.appendChild(icon);
+    iconWrap.appendChild(iconCenter);
     root.appendChild(iconWrap);
-    iconWrap.appendChild(icon);
     root.appendChild(hoverMask);
     root.appendChild(levelBadge);
     root.appendChild(tip);
@@ -354,10 +355,12 @@ export default class SkillOrbs extends Plugin {
     if (this.orbsRow) this.orbsRow.appendChild(root);
 
     const state: OrbState = {
-      root, ring, core, icon, levelBadge, tooltip: tip, hoverMask,
+      root, ring, core, iconWrap, iconCenter, icon, levelBadge, tooltip: tip, hoverMask,
       totalXp: 0, currentLevel: 1, toNext: 0, progress01: 0,
       samples: [], lastActivityMs: Date.now(),
     };
+
+    requestAnimationFrame(() => this.applyIconScale(state));
 
     this.applyTooltipVisibility(state);
     this.orbs.set(skillName, state);
@@ -469,7 +472,6 @@ export default class SkillOrbs extends Plugin {
     this.updateOrbSizes(this.getOrbSize());
     this.updateTooltipVisibility();
     this.resetAllFadeTimers();
-    this.updateIconSizes();
   }
 
   private updateTooltipVisibility(): void {
@@ -496,17 +498,30 @@ export default class SkillOrbs extends Plugin {
     if (hrRow) hrRow.classList.toggle('is-hidden', !this.isSettingOn('showXpHr'));
   }
 
+  private applyIconScale(orb: OrbState): void {
+    if (!orb.icon) return;
+    const innerPx = Math.floor(this.getOrbSize() * this.getInnerCoreScale());
+    const target  = Math.floor(innerPx * 0.94);   // small inset
+    const scale   = target / this.HS_BASE_CELL_PX;
+    orb.icon.style.setProperty('--iconScale', scale.toFixed(3));
+}
+
+  private applyOrbScale(orb: OrbState,size): void {
+    orb.root.style.setProperty('--size', size + 'px');
+    const scale = size / CONSTANTS.DEFAULT_ORB_SIZE;
+    orb.iconWrap.style.setProperty('--orbScale', scale.toFixed(3));
+
+  }
+
   private updateOrbSizes(n: unknown): void {
     const size = typeof n === 'number' ? n : this.getOrbSize();
-    this.orbs.forEach(o => o.root.style.setProperty('--size', size + 'px'));
+    this.orbs.forEach(o => this.applyOrbScale(o,size));
     this.updateIconSizes();
   }
 
   private updateIconSizes(): void {
-    const innerPx = Math.floor(this.getOrbSize() * this.getInnerCoreScale());
-    const iconPx = Math.floor(innerPx * 0.62);
-    this.orbs.forEach(o => { o.icon.style.fontSize = iconPx + 'px'; });
-  }
+    this.orbs.forEach(o => this.applyIconScale(o));
+    }
 
   // ===== STATS & CALCULATIONS =====
   private startStatsLoop(): void {
@@ -649,6 +664,8 @@ export default class SkillOrbs extends Plugin {
     const s = this.settings[key as string];
     return !!(s && typeof s.value !== 'undefined' && s.value);
   }
+
+
 
   // ===== GETTER METHODS =====
   private getInnerCoreScale(): number { return CONSTANTS.INNER_CORE_SCALE_INT / 100; }
