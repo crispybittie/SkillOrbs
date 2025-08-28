@@ -10,7 +10,7 @@
 
 .hl-skill-orb {
   position: relative;
-  pointer-events: auto;
+  pointer-events: none;
   width: var(--size);
   height: var(--size);
   transition: opacity 220ms ease, transform 220ms ease;

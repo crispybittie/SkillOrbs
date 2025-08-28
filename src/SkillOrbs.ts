@@ -94,8 +94,8 @@ export default class SkillOrbs extends Plugin {
         text: 'Skill Orbs',
         value: true,
         callback: (v: boolean) => {
-          if (!v) this.hideAllOrbs();
-          else this.refreshLayoutFromSettings();
+          if (!v) this.stop();
+          else this.start();
         }
       },
       alignOrbs: {
@@ -104,7 +104,7 @@ export default class SkillOrbs extends Plugin {
         value: "Whole Game Window",
         description: 'How to position orbs on the x-axis',
         options: options,
-        callback: () => {if (this.orbsRow) {this.updateOrbsRowAlignment(this.orbsRow)}}
+        callback: (v: boolean) => {if (this.orbsRow) {this.updateOrbsRowAlignment(this.orbsRow)}}
 
       },
 
@@ -564,6 +564,7 @@ export default class SkillOrbs extends Plugin {
       this.orbs.forEach(orb => this.updateOrbEmaFromEvent(orb, now));
       this.orbs.forEach(orb => this.renderOrbStatsFor(orb));
     }, 1000);
+    this.refreshLayoutFromSettings();
   }
 
   private stopStatsLoop(): void {
