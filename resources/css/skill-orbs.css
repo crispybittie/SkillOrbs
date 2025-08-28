@@ -2,8 +2,6 @@
 .hl-skill-orbs {
   pointer-events: none;
   position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
   display: inline-flex;
   width: max-content;
   white-space: nowrap;

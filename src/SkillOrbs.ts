@@ -87,16 +87,28 @@ export default class SkillOrbs extends Plugin {
 
   // ===== SETTINGS =====
   private getDefaultSettings(): (Record<string, PluginSettings> & { enable: PluginSettings }) {
+    let options: string[] = ["Whole Game Window","Up To Compass"];
     return {
       enable: {
         type: SettingsTypes.checkbox,
-        text: 'Experience Orbs',
+        text: 'Skill Orbs',
         value: true,
         callback: (v: boolean) => {
           if (!v) this.hideAllOrbs();
           else this.refreshLayoutFromSettings();
         }
       },
+      alignOrbs: {
+        type: SettingsTypes.combobox,
+        text: 'Center Align Orbs',
+        value: "Whole Game Window",
+        description: 'How to position orbs on the x-axis',
+        options: options,
+        callback: () => {if (this.orbsRow) {this.updateOrbsRowAlignment(this.orbsRow)}}
+
+      },
+
+
       showCurrentXp: {
         type: SettingsTypes.checkbox,
         text: 'Current XP',
@@ -233,7 +245,7 @@ export default class SkillOrbs extends Plugin {
 
       orb.samples.push({ xp: s._xp, t: now });
       this.gcSamples(orb, now);
-
+      this.refreshLayoutFromSettings();
       this.renderOrb(orb);
       this.renderOrbStatsFor(orb);
       this.resetFade(orb, now);
@@ -249,8 +261,7 @@ export default class SkillOrbs extends Plugin {
     row.id = 'hl-skill-orbs';
     row.style.position = 'absolute';
     row.style.top = '6px';
-    row.style.left = '50%';
-    row.style.transform = 'translateX(-50%)';
+    this.updateOrbsRowAlignment(row);
     row.style.display = 'inline-flex';
     row.style.width = 'max-content';
     row.style.whiteSpace = 'nowrap';
@@ -469,6 +480,7 @@ export default class SkillOrbs extends Plugin {
 
   // ===== SETTINGS-DRIVEN UPDATES =====
   private refreshLayoutFromSettings(): void {
+    if (this.orbsRow) this.updateOrbsRowAlignment(this.orbsRow);
     this.updateOrbSizes(this.getOrbSize());
     this.updateTooltipVisibility();
     this.resetAllFadeTimers();
@@ -522,6 +534,27 @@ export default class SkillOrbs extends Plugin {
   private updateIconSizes(): void {
     this.orbs.forEach(o => this.applyIconScale(o));
     }
+
+  private updateOrbsRowAlignment(orbsRow : HTMLDivElement): void {
+    if (this.settings.alignOrbs.value = "Whole Game Window") {
+        if (!orbsRow.style.left) {
+            orbsRow.style.left = "50%";}
+        if (orbsRow.style.right) {
+            orbsRow.style.removeProperty("right")
+        }
+        orbsRow.style.transform = 'translateX(-50%)';
+        }
+    else if (this.settings.alignOrbs.value = "Up To Compass") {
+        if (!orbsRow.style.right) {
+            orbsRow.style.right = "calc(var(--hs-compass-button-right) + 6px)";}
+        if (orbsRow.style.left) {
+            orbsRow.style.removeProperty("left")
+        }
+        orbsRow.style.transform = 'translateX(50%)';
+    }
+    this.orbsRow = orbsRow;
+    return;
+  }
 
   // ===== STATS & CALCULATIONS =====
   private startStatsLoop(): void {
