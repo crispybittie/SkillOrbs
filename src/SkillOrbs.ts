@@ -46,6 +46,7 @@ const CONSTANTS = {
   DEFAULT_ORB_SIZE: 56,
   MIN_ORB_SIZE: 36,
   MAX_ORB_SIZE: 96,
+  ICON_SCALE_PCT: 85,
   FADE_DURATION_MS: 220,
   EMA_TAU_SECONDS: 30,
   SAMPLE_RETENTION_MS: 5 * 60 * 1000,
@@ -108,7 +109,6 @@ export default class SkillOrbs extends Plugin {
 
       },
 
-
       showCurrentXp: {
         type: SettingsTypes.checkbox,
         text: 'Current XP',
@@ -136,18 +136,48 @@ export default class SkillOrbs extends Plugin {
       fadeSeconds: {
         type: SettingsTypes.range,
         text: 'Fade (seconds)',
+        description: 'Min 1s, Max 600s',
         value: 5,
-        min: 0,
+        min: 1,
         max: 600,
         callback: () => this.resetAllFadeTimers()
       },
+
+        iconScaling: {
+            type: SettingsTypes.range,
+            text: 'Icon Scaling %',
+            description: 'Min 50%, Max 90%',
+            value: CONSTANTS.ICON_SCALE_PCT,
+            min: 50,
+            max: 90,
+            callback: (v: number) => {
+                this.setIconScale(v);
+                this.updateIconSizes();
+            }
+        },
+
       orbSize: {
         type: SettingsTypes.range,
         text: 'Orb Size (px)',
+        description: 'Min '+CONSTANTS.MIN_ORB_SIZE+', Max '+CONSTANTS.MAX_ORB_SIZE+'px.',
         value: CONSTANTS.DEFAULT_ORB_SIZE,
         min: CONSTANTS.MIN_ORB_SIZE,
         max: CONSTANTS.MAX_ORB_SIZE,
         callback: (v: number) => this.updateOrbSizes(this.toNum(v, CONSTANTS.DEFAULT_ORB_SIZE))
+      },
+
+      sizeInfo: {
+        type: SettingsTypes.alert,
+        text: 'Orb Size Bug',
+        value: 'May not display new size correctly until after it fades',
+        callback: () => null
+        },
+
+      fadeOrbs: {
+        type: SettingsTypes.button,
+        text: 'Fade All Orbs',
+        value: 'Apply',
+        callback: () => this.hideAllOrbs()
       }
     };
   }
@@ -507,7 +537,8 @@ private setupCanvasSizeMonitoring() {
   }
 
   private hideAllOrbs(): void {
-    this.orbs.forEach(o => o.root.classList.add('is-fading'));
+    this.orbs.forEach(o => this.beginFade(o));
+    this.refreshLayoutFromSettings();
   }
 
   // ===== SETTINGS-DRIVEN UPDATES =====
@@ -515,6 +546,7 @@ private setupCanvasSizeMonitoring() {
     if (this.orbsRow) this.updateOrbsRowAlignment(this.orbsRow);
     this.updateOrbSizes(this.getOrbSize());
     this.updateTooltipVisibility();
+    this.updateIconSizes();
     this.resetAllFadeTimers();
   }
 
@@ -545,7 +577,7 @@ private setupCanvasSizeMonitoring() {
   private applyIconScale(orb: OrbState): void {
     if (!orb.icon) return;
     const innerPx = Math.floor(this.getOrbSize() * this.getInnerCoreScale());
-    const target  = Math.floor(innerPx * 0.94);   // small inset
+    const target  = Math.floor(innerPx * this.getIconScaleInt());   // small inset
     const scale   = target / this.HS_BASE_CELL_PX;
     orb.icon.style.setProperty('--iconScale', scale.toFixed(3));
 }
@@ -732,11 +764,20 @@ private setupCanvasSizeMonitoring() {
 
 
   // ===== GETTER METHODS =====
+
+  private getIconScaleInt(): number { return CONSTANTS.ICON_SCALE_PCT / 100; }
   private getInnerCoreScale(): number { return CONSTANTS.INNER_CORE_SCALE_INT / 100; }
   private getRingThickness(): number { return CONSTANTS.RING_THICKNESS_INT / 100; }
   private getOrbSize(): number { return this.toNum(this.settings.orbSize.value, CONSTANTS.DEFAULT_ORB_SIZE); }
   private getOrbSizeCss(): string { return this.getOrbSize() + 'px'; }
   private getFadeSeconds(): number { return this.toNum(this.settings.fadeSeconds.value, 5); }
+
+  private setIconScale(percent: number): any {
+    if ((percent >= 50) && (percent <= 90)){
+        CONSTANTS.ICON_SCALE_PCT = percent
+    }
+    return;
+  }
 
   // ===== UTILITY METHODS =====
   private toNum(v: unknown, fallback: number): number {
