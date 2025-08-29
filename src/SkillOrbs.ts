@@ -95,10 +95,10 @@ export default class SkillOrbs extends Plugin {
         type: SettingsTypes.checkbox,
         text: 'Skill Orbs',
         value: true,
-        callback: (v: boolean) => {
-          if (!v) this.stop();
-          else this.start();
-        }
+        callback: () => {
+            if (this.hasStarted) this.stop();
+            else this.start();
+}
       },
       alignOrbs: {
         type: SettingsTypes.combobox,
@@ -189,9 +189,13 @@ export default class SkillOrbs extends Plugin {
 
   init(): void {
     // Initialization logic if needed
+    this.hasStarted = false;
   }
 
   start(): void {
+    if (this.hasStarted) {
+        return this.log('hasStarted == True, start() aborted')
+    }     
     this.setupRoot();
     
     this.injectStyles();
@@ -203,9 +207,13 @@ export default class SkillOrbs extends Plugin {
     this.refreshLayoutFromSettings();
     this.startStatsLoop();
     this.log('Skill Orbs started');
+    this.hasStarted = true;
   }
 
   stop(): void {
+    if (!this.hasStarted) {
+        return this.log('hasStarted == false, stop() aborted')
+    }    
     this.orbs.forEach(o => o.root.remove());
     this.orbs.clear();
     this.prevXp.clear();
@@ -219,21 +227,20 @@ export default class SkillOrbs extends Plugin {
     cancelAnimationFrame(this.hoverRaf);
     this.stopStatsLoop();
     this.log('Skill Orbs stopped');
+    this.hasStarted = false;
   }
 
   // ===== GAME LOOP =====
   GameLoop_update(): void {
     if (!this.settings.enable.value) return;
-    if (!this.gameHooks || !this.gameHooks.EntityManager || !this.gameHooks.EntityManager.Instance) return;
-    
-    const main = this.gameHooks.EntityManager.Instance.MainPlayer;
-    if (!main) return;
+    const allSkills = this.getPlayerSkills();
+    if (!allSkills || allSkills.length === 0) return;
 
-    const resourceSkills: Skill[] = this.normalizeSkillsBag(main.Skills ? main.Skills._skills ?? main.Skills : []);
-    const combatSkills: Skill[] = this.normalizeSkillsBag(main.Combat ? main.Combat._skills ?? main.Combat : []);
-    const allSkills: Skill[] = resourceSkills.concat(combatSkills);
-    
-    if (allSkills.length === 0) return;
+    if (!this.isXpTrackingInitialized) {
+        this.initializeXpTracking();
+        return; // Skip this frame
+    }
+
 
     const now = Date.now();
     
@@ -279,6 +286,38 @@ export default class SkillOrbs extends Plugin {
     }
   }
 
+  // ----- FUNCTIONS FOR GAME LOOP ----- //
+
+  private getPlayerSkills(): Skill[] | null {
+    if (!this.gameHooks?.EntityManager?.Instance) return null;
+    
+    const main = this.gameHooks.EntityManager.Instance.MainPlayer;
+    if (!main) return null;
+
+    const resourceSkills: Skill[] = this.normalizeSkillsBag(main.Skills ? main.Skills._skills ?? main.Skills : []);
+    const combatSkills: Skill[] = this.normalizeSkillsBag(main.Combat ? main.Combat._skills ?? main.Combat : []);
+    
+    return resourceSkills.concat(combatSkills);
+    }
+
+private initializeXpTracking(): void {
+    const allSkills = this.getPlayerSkills();
+    if (!allSkills || allSkills.length === 0) {
+        this.log('Cannot initialize XP tracking - no skills found');
+        return;
+    }
+
+    for (let i = 0; i < allSkills.length; i++) {
+        const s = allSkills[i];
+        if (!this.isValidSkill(s)) continue;
+
+        const skillNameLookup = (this.gameLookups?.Skills?.[s._skill]) || String(s._skill);
+        this.prevXp.set(skillNameLookup, s._xp);
+    }
+    
+    this.isXpTrackingInitialized = true;
+    this.log(`XP tracking initialized for ${this.prevXp.size} skills`);
+    }
   // ===== UI MANAGEMENT =====
   private setupRoot(): void {
     this.cleanupRoot();
