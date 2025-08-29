@@ -46,7 +46,7 @@ const CONSTANTS = {
   DEFAULT_ORB_SIZE: 56,
   MIN_ORB_SIZE: 36,
   MAX_ORB_SIZE: 96,
-  ICON_SCALE_PCT: 85,
+  ICON_SCALE_PCT: 80,
   FADE_DURATION_MS: 220,
   EMA_TAU_SECONDS: 30,
   SAMPLE_RETENTION_MS: 5 * 60 * 1000,
@@ -170,16 +170,9 @@ export default class SkillOrbs extends Plugin {
         }
       },
 
-      sizeInfo: {
-        type: SettingsTypes.alert,
-        text: 'Orb Size Bug',
-        value: 'May not display new size correctly until after it fades',
-        callback: () => null
-        },
-
       fadeOrbs: {
         type: SettingsTypes.button,
-        text: 'Fade All Orbs',
+        text: 'Clear All Orbs',
         value: 'Apply',
         callback: () => this.hideAllOrbs()
       }
