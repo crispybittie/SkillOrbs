@@ -84,6 +84,7 @@ export default class SkillOrbs extends Plugin {
   private onMouseLeaveBound: ((e: MouseEvent) => void) | null = null;
   private hoverRaf = 0;
   private statsTimer?: number;
+  private iconScalePct = CONSTANTS.ICON_SCALE_PCT;
   private readonly HS_BASE_CELL_PX = 24;
 
   // ===== SETTINGS =====
@@ -151,6 +152,7 @@ export default class SkillOrbs extends Plugin {
             min: 50,
             max: 90,
             callback: (v: number) => {
+                v = this.value;
                 this.setIconScale(v);
                 this.updateIconSizes();
             }
@@ -159,11 +161,14 @@ export default class SkillOrbs extends Plugin {
       orbSize: {
         type: SettingsTypes.range,
         text: 'Orb Size (px)',
-        description: 'Min '+CONSTANTS.MIN_ORB_SIZE+', Max '+CONSTANTS.MAX_ORB_SIZE+'px.',
+        description: 'Min '+CONSTANTS.MIN_ORB_SIZE+'px, Max '+CONSTANTS.MAX_ORB_SIZE+'px.',
         value: CONSTANTS.DEFAULT_ORB_SIZE,
         min: CONSTANTS.MIN_ORB_SIZE,
         max: CONSTANTS.MAX_ORB_SIZE,
-        callback: (v: number) => this.updateOrbSizes(this.toNum(v, CONSTANTS.DEFAULT_ORB_SIZE))
+        callback: (v: number) => {
+            v = this.value;
+            this.updateOrbSizes(this.toNum(v, CONSTANTS.DEFAULT_ORB_SIZE));
+        }
       },
 
       sizeInfo: {
@@ -765,7 +770,7 @@ private setupCanvasSizeMonitoring() {
 
   // ===== GETTER METHODS =====
 
-  private getIconScaleInt(): number { return CONSTANTS.ICON_SCALE_PCT / 100; }
+  private getIconScaleInt(): number { return this.iconScalePct / 100; }
   private getInnerCoreScale(): number { return CONSTANTS.INNER_CORE_SCALE_INT / 100; }
   private getRingThickness(): number { return CONSTANTS.RING_THICKNESS_INT / 100; }
   private getOrbSize(): number { return this.toNum(this.settings.orbSize.value, CONSTANTS.DEFAULT_ORB_SIZE); }
@@ -774,7 +779,7 @@ private setupCanvasSizeMonitoring() {
 
   private setIconScale(percent: number): any {
     if ((percent >= 50) && (percent <= 90)){
-        CONSTANTS.ICON_SCALE_PCT = percent
+        this.iconScalePct = percent
     }
     return;
   }
