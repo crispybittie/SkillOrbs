@@ -151,9 +151,8 @@ export default class SkillOrbs extends Plugin {
             value: CONSTANTS.ICON_SCALE_PCT,
             min: 50,
             max: 90,
-            callback: (v: number) => {
-                v = this.value;
-                this.setIconScale(v);
+            callback: () => {
+                this.setIconScale();
                 this.updateIconSizes();
             }
         },
@@ -165,8 +164,8 @@ export default class SkillOrbs extends Plugin {
         value: CONSTANTS.DEFAULT_ORB_SIZE,
         min: CONSTANTS.MIN_ORB_SIZE,
         max: CONSTANTS.MAX_ORB_SIZE,
-        callback: (v: number) => {
-            v = this.value;
+        callback: () => {
+            const v = this.settings.orbSize.value;
             this.updateOrbSizes(this.toNum(v, CONSTANTS.DEFAULT_ORB_SIZE));
         }
       },
@@ -536,13 +535,22 @@ private setupCanvasSizeMonitoring() {
     }, 260);
   }
 
+  private removeOrb(orb: OrbState) {
+    if (orb.root.parentElement) orb.root.parentElement.removeChild(orb.root);
+        this.orbs.forEach((v, k) => { if (v === orb) this.orbs.delete(k); });
+        orb.isFading = false;
+         if (orb.fadeHandle) { clearTimeout(orb.fadeHandle); orb.fadeHandle = undefined; }
+        if (orb.removeHandle) { clearTimeout(orb.removeHandle); 
+            orb.removeHandle = undefined;}
+  }
+
   private resetAllFadeTimers(): void {
     const now = Date.now();
     this.orbs.forEach(o => this.resetFade(o, now));
   }
 
   private hideAllOrbs(): void {
-    this.orbs.forEach(o => this.beginFade(o));
+    this.orbs.forEach(o => {this.removeOrb(o)});
     this.refreshLayoutFromSettings();
   }
 
@@ -777,10 +785,14 @@ private setupCanvasSizeMonitoring() {
   private getOrbSizeCss(): string { return this.getOrbSize() + 'px'; }
   private getFadeSeconds(): number { return this.toNum(this.settings.fadeSeconds.value, 5); }
 
-  private setIconScale(percent: number): any {
-    if ((percent >= 50) && (percent <= 90)){
-        this.iconScalePct = percent
+  private setIconScale(percent?: number): any {
+    
+    if (!percent) {
+        const value = this.settings.iconScaling.value;
+        percent = this.toNum(value,CONSTANTS.ICON_SCALE_PCT)
     }
+    if ((percent >= 50) && (percent <= 90)){
+        this.iconScalePct = percent}
     return;
   }
 
