@@ -1,3 +1,26 @@
+## SPECIAL THANKS
+
+I wouldn't have known where to start without the documentation and clean code you guys made available. Could not have put this together without the hard yards that ya'll put in. I copied some code to get things running so I hope you don't mind, and if anyone specifically would like credit, I am happy to provide that wherever you please.
+
+Highlite team for the Example Plugin Template and of course, Highlite itself!
+
+Experience Tracker and Nameplates by Highlite Team
+- Experience Tracker was crucial for learning how to hook into skills and xp. Quite a significant bit of code was adopted.
+
+Entity-Highlighter and XP Orb by Tomb
+- Adopted the lovely code in XP Orb to grab in-game skill icons and display elements over the game canvas. Boy did that become much more difficult than I expected.
+- Entity Highlighter was also very useful for understanding how the gameHooks work. Might have used some code from this too (I realllyyyy should have documented when and where I did by the way.)
+
+Goes without saying that GPT-5 was widely used throughout to help me do things I barely understand at all. As a casual coder who hasn't touched it for five years and certainly never dove into proper practical implementation, I am just fine admitting that.
+
+The code is spaghetti, barely documented and completely inflexible as of yet, but it functions above the hood for now and that is a good place to start. Tech debt incoming!!
+
+
+
+
+
+
+
 # Highlite Example Plugin Template
 
 A template repository for creating plugins for the HighLite client. This template showcases the basic structure, lifecycle methods, and how to use static resources like HTML, CSS, images, and audio files.
