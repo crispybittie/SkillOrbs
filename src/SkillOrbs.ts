@@ -300,7 +300,7 @@ export default class SkillOrbs extends Plugin {
 
     
     const mask = document.getElementById('hs-screen-mask');
-    if (mask) mask.appendChild(row); else console.log('COULD NOT APPEND TO MASK');
+    if (mask) mask.appendChild(row); else this.log('COULD NOT APPEND TO MASK');
     
   }
 
